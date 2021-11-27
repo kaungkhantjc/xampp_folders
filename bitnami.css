@@ -1,0 +1,75 @@
+.module_top, .module_bottom {
+    visibility: hidden;
+}
+
+table {
+    border: 0 !important;
+}
+
+.module_content img {
+    min-width: 70px;
+}
+
+.module_content h2 {
+    font-size: 30px;
+}
+
+.home-item {
+    padding: 10px;
+    background: #d2d2ff;
+    margin: 10px;
+    border-radius: 10px;
+    border: 2px solid #8585ff;
+}
+
+.sub-dir-item {
+    padding: 10px;
+    background: #ffffff;
+    margin: 10px;
+    border-radius: 10px;
+    border: 2px solid #ffa97a;
+}
+
+.list-item {
+    padding: 10px;
+    background: #ffffff;
+    margin: 10px;
+    border-radius: 10px;
+    border: 2px solid #85b0ff;
+}
+
+.home-item a, .sub-dir-item a, .list-item a {
+    color: black;
+    width: 100%;
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+}
+
+.sub-dir-item a img, .list-item a img, .home-item a img {
+    margin-left: 20px;
+    width: 2.4rem;
+    height: 2.4rem;
+}
+
+.sub-dir-item a span, .list-item a span, .home-item a span {
+    font-size: 20px;
+    margin-left: 10px;
+}
+
+i.icon:before {
+    width: initial;
+    font-size: 2.4rem;
+    margin-left: 20px;
+}
+
+.git-layout {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+}
+
+.git-layout > span {
+    margin-right: 10px;
+}
+
