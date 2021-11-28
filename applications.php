@@ -63,8 +63,47 @@ class DirectoryUtils
             case DirectoryType::$TYPE_LARAVEL:
                 return $dirPath . "/public";
         }
-        return "applications.php?dir=" . urldecode($dirPath);
+        return "applications.php?dir=" . $dirPath;
     }
+}
+
+class BreadcrumbUtils
+{
+    // breadcrumb list max count excluding Home item
+    private static int $MAX_COUNT = 5;
+
+    public static function getBreadcrumbList($currentDir): array
+    {
+        $breadcrumbList = array();
+
+        $dirList = explode('/', $currentDir);
+        if ($dirList[0] === '.') array_splice($dirList, 0, 1); // remove home directory if exists in query
+
+        $dirCount = count($dirList);
+
+        if ($dirCount > self::$MAX_COUNT) {
+            $startIndex = $dirCount - self::$MAX_COUNT;
+            $startPathList = array_slice($dirList, 0, $startIndex);
+            $startPath = implode("/", $startPathList);
+
+            // add closest directory as .. path
+            array_push($breadcrumbList, new Breadcrumb("..", $startPath));
+
+            for ($i = $startIndex; $i < $dirCount; $i++) {
+                $startPath .= "/" . $dirList[$i];
+                array_push($breadcrumbList, new Breadcrumb($dirList[$i], $startPath));
+            }
+        } else {
+            $startPath = ".";
+            foreach ($dirList as $dir) {
+                $startPath .= "/" . $dir;
+                array_push($breadcrumbList, new Breadcrumb($dir, $startPath));
+            }
+        }
+
+        return $breadcrumbList;
+    }
+
 }
 
 class AppFile
@@ -74,22 +113,42 @@ class AppFile
     public string $path;
     public ?string $icon;
     public string $type;
+    public int $modifiedAt;
 
     /**
      * AppFile constructor.
      * @param bool $isFile
      * @param string $name
      * @param string $path
-     * @param ?string $icon
+     * @param string|null $icon
      * @param string $type
+     * @param int $modifiedAt
      */
-    public function __construct(bool $isFile, string $name, string $path, ?string $icon, string $type = "unknown")
+    public function __construct(bool $isFile, string $name, string $path, ?string $icon, string $type, int $modifiedAt)
     {
         $this->isFile = $isFile;
         $this->name = $name;
         $this->path = $path;
         $this->icon = $icon;
         $this->type = $type;
+        $this->modifiedAt = $modifiedAt;
+    }
+}
+
+class Breadcrumb
+{
+    public string $name;
+    public string $path;
+
+    /**
+     * Breadcrumb constructor.
+     * @param string $name
+     * @param string $path
+     */
+    public function __construct(string $name, string $path)
+    {
+        $this->name = $name;
+        $this->path = $path;
     }
 }
 
@@ -97,6 +156,7 @@ $appFileList = array();
 $homeDirectory = ".";
 
 $currentDir = isset($_GET['dir']) ? urldecode($_GET['dir']) : $homeDirectory;
+$currentDir = $currentDir ?: ".";
 $isHome = $currentDir === $homeDirectory;
 
 if (is_dir($currentDir)) {
@@ -109,7 +169,7 @@ if (is_dir($currentDir)) {
                 $type = $isFile ? FileUtils::getType($fullPath) : DirectoryUtils::getType($fullPath);
                 $icon = $isFile ? NULL : DirectoryUtils::getIcon($type);
                 $filePath = $isFile ? $fullPath : DirectoryUtils::getPath($type, $fullPath);
-                $appFile = new AppFile($isFile, $directory, $filePath, $icon, $type);
+                $appFile = new AppFile($isFile, $directory, $filePath, $icon, $type, filemtime($fullPath));
                 array_push($appFileList, $appFile);
             }
         }
@@ -123,6 +183,9 @@ usort($appFileList, function ($firstFile, $secondFile) {
         return $firstFile->isFile - $secondFile->isFile;
     }
 });
+
+$breadcrumbList = BreadcrumbUtils::getBreadcrumbList($currentDir);
+$breadcrumbCount = count($breadcrumbList);
 
 ?>
 
@@ -192,46 +255,55 @@ usort($appFileList, function ($firstFile, $secondFile) {
         </div>
     </div>
     <div id="lowerContainer" class="row">
-        <div id="content" class="large-12 columns">
-
-            <?php if (!$isHome): ?>
-                <div class="home-item">
-                    <a href="applications.php">
-                        <img src="./dashboard/images/apps/home.svg" alt="home">
-                        <span>HOME</span>
-                    </a>
-                </div>
-                <div class="sub-dir-item">
-                    <a href="<?php echo "applications.php?dir=" . dirname($currentDir); ?>">
-                        <img src="./dashboard/images/apps/subdirectory.svg" alt="parent directory">
-                        <span>Parent directory</span>
-                    </a>
-                </div>
-            <?php endif; ?>
-
-            <?php foreach ($appFileList as $appFile): ?>
-                <?php if ($appFile->isFile): ?>
-                    <div class="list-item">
-                        <a href="<?php echo $appFile->path; ?>">
-                            <!--suppress HtmlUnknownAttribute -->
-                            <i data-file-name="<?php echo $appFile->name; ?>"></i>
-                            <span><?php echo $appFile->name; ?></span>
-                        </a>
-                    </div>
-                <?php else : ?>
-                    <div class="list-item">
-                        <a href="<?php echo $appFile->path; ?>">
-                            <img src="./dashboard/images/apps/<?php echo $appFile->icon; ?>" alt="directory">
-                            <span><?php echo $appFile->name; ?></span>
-                        </a>
-                    </div>
-                <?php endif; ?>
-            <?php endforeach; ?>
-
-            <?php if (count($appFileList) == 0): ?>
-                <div class="list-item"><h4 style="margin: 20px">No files found.</h4></div>
-            <?php endif; ?>
+        <div class="action-bar">
+            <ul class="breadcrumb">
+                <li><a href="?dir=."><img src="./dashboard/images/apps/home.svg" alt="home">Home</a></li>
+                <?php foreach ($breadcrumbList as $index => $breadcrumb): ?>
+                    <?php if ($index == $breadcrumbCount - 1): ?>
+                        <li><?php echo $breadcrumb->name; ?></li>
+                    <?php else: ?>
+                        <li>
+                            <a href="<?php echo "applications.php?dir=" . $breadcrumb->path; ?>"><?php echo $breadcrumb->name; ?></a>
+                        </li>
+                    <?php endif; ?>
+                <?php endforeach; ?>
+            </ul>
+            <a href="<?php echo $breadcrumbCount == 0 ? "." : $breadcrumbList[$breadcrumbCount - 1]->path; ?>"
+               target="_blank"><img
+                        src="./dashboard/images/apps/open_in_new_black_24dp.svg"
+                        alt="external"></a>
         </div>
+
+        <?php foreach ($appFileList as $appFile): ?>
+            <?php if ($appFile->isFile): ?>
+                <div class="list-item">
+                    <a href="<?php echo $appFile->path; ?>">
+                        <!--suppress HtmlUnknownAttribute -->
+                        <i data-file-name="<?php echo $appFile->name; ?>"></i>
+                        <span class="name-layout">
+                                <span><?php echo $appFile->name; ?></span>
+                            <!--suppress HtmlUnknownAttribute -->
+                                <span data-timestamp="<?php echo $appFile->modifiedAt; ?>"></span>
+                            </span>
+                    </a>
+                </div>
+            <?php else : ?>
+                <div class="list-item">
+                    <a href="<?php echo $appFile->path; ?>">
+                        <img src="./dashboard/images/apps/<?php echo $appFile->icon; ?>" alt="directory">
+                        <span class="name-layout">
+                                <span><?php echo $appFile->name; ?></span>
+                            <!--suppress HtmlUnknownAttribute -->
+                                <span data-timestamp="<?php echo $appFile->modifiedAt; ?>"></span>
+                            </span>
+                    </a>
+                </div>
+            <?php endif; ?>
+        <?php endforeach; ?>
+
+        <?php if (count($appFileList) == 0): ?>
+            <div class="list-item"><h4 style="margin: 20px">No files found.</h4></div>
+        <?php endif; ?>
     </div>
 </div>
 <!--suppress HtmlUnknownTag -->
@@ -284,13 +356,32 @@ usort($appFileList, function ($firstFile, $secondFile) {
         })
     }
 
+    function formatTimestamp(timestamp) {
+        let date = new Date(timestamp * 1000)
+        return date.toLocaleString('en-US', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            hour12: true,
+            minute: '2-digit'
+        })
+    }
+
     document.addEventListener("DOMContentLoaded", function () {
+        // load file icons
         const iconElements = document.querySelectorAll("div.list-item a i")
         iconElements.forEach(function (iconElement) {
             // execute loadIcon method after 50 milliseconds for smooth page loading
             setTimeout(function () {
                 loadIcon(iconElement, iconElement.dataset.fileName)
             }, 50)
+        })
+
+        // format timestamp using local timezone
+        const dateElements = document.querySelectorAll("span[data-timestamp]")
+        dateElements.forEach(function (dateElement) {
+            dateElement.innerHTML = formatTimestamp(dateElement.dataset.timestamp)
         })
     })
 </script>
